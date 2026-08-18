@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>A220 Pro | Gestión</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
+    <style>
+        .image-upload {
+            border: 2px dashed var(--e);
+            border-radius: var(--s);
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: .3s;
+            background: var(--b);
+        }
+        .image-upload:hover {
+            border-color: var(--a);
+            background: rgba(245,158,11,0.05);
+        }
+        .image-upload img {
+            max-width: 100px;
+            max-height: 100px;
+            border-radius: var(--s);
+            margin-top: 10px;
+        }
+        .product-image-thumb {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ===== LOGIN CON GOOGLE ===== -->
+    <div id="loginOverlay">
+        <div class="login-box">
+            <div class="brand">A <span>220</span></div>
+            <div class="sub">Sistema de Gestión</div>
+            <div style="margin:20px 0;">
+                <button class="btn-google" onclick="loginConGmail()">
+                    <i class="fab fa-google"></i> Ingresar con Gmail
+                </button>
+            </div>
+            <div class="error" id="loginError"></div>
+            <div style="margin-top:14px;font-size:11px;color:var(--l);">
+                <i class="fas fa-shield-alt"></i> Solo cuentas Gmail autorizadas
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== SCANNER ===== -->
+    <div id="scannerContainer">
+        <div id="scannerView">
+            <div class="scanner-overlay">
+                <div class="scanner-line"></div>
+            </div>
+        </div>
+        <div class="scanner-status" id="scannerStatus">
+            <i class="fas fa-camera"></i> Apuntá al código de barras
+        </div>
+        <div class="scanner-controls">
+            <button class="btn btn-danger" onclick="stopScanner()">
+                <i class="fas fa-times"></i> Cerrar
+            </button>
+            <button class="btn btn-accent" onclick="toggleTorch()">
+                <i class="fas fa-lightbulb"></i> Linterna
+            </button>
+        </div>
+    </div>
+
+    <!-- ===== TOASTS ===== -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- ===== HEADER ===== -->
+    <header>
+        <div>
+            <div class="brand">A <span>220</span></div>
+            <div class="sub">Gestión · Kiosco</div>
+        </div>
+        <div class="header-right">
+            <div id="clock"></div>
+            <span style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.08);padding:3px 12px;border-radius:20px;">
+                <img id="userAvatar" src="" style="width:24px;height:24px;border-radius:50%;display:none;">
+                <span id="userDisplay" style="font-size:12px;color:#cbd5e1;"></span>
+            </span>
+            <button class="btn-icon" onclick="toggleTheme()">
+                <i class="fas fa-moon"></i>
+            </button>
+            <button class="btn-icon" onclick="doLogout()">
+                <i class="fas fa-sign-out-alt"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- ===== NAV ===== -->
+    <nav>
+        <button class="active" onclick="showView('inicio',this)">
+            <i class="fas fa-chart-pie"></i>
+            <span>Inicio</span>
+        </button>
+        <button onclick="showView('ventas',this)">
+            <i class="fas fa-cart-plus"></i>
+            <span>Ventas</span>
+        </button>
+        <button onclick="showView('productos',this)">
+            <i class="fas fa-boxes"></i>
+            <span>Productos</span>
+        </button>
+        <button onclick="showView('movimientos',this)">
+            <i class="fas fa-history"></i>
+            <span>Movimientos</span>
+        </button>
+        <button onclick="showView('sync',this)">
+            <i class="fas fa-sync"></i>
+            <span>Sincronizar</span>
+        </button>
+    </nav>
+
+    <!-- ===== MAIN ===== -->
+    <main>
+
+        <!-- ===== INICIO ===== -->
+        <section id="inicio" class="view active">
+            <h2><i class="fas fa-chart-pie"></i> Panel</h2>
+            <div class="cards">
+                <div class="card">
+                    <div class="card-icon"><i class="fas fa-dollar-sign"></i></div>
+                    <div class="card-info">
+                        <div class="card-label">Ventas hoy</div>
+                        <div class="card-value" id="dVentas">$0</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-icon"><i class="fas fa-box"></i></div>
+                    <div class="card-info">
+                        <div class="card-label">Productos</div>
+                        <div class="card-value" id="dProductos">0</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                    <div class="card-info">
+                        <div class="card-label">Stock bajo</div>
+                        <div class="card-value" id="dBajo">0</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-icon"><i class="fas fa-shopping-bag"></i></div>
+                    <div class="card-info">
+                        <div class="card-label">Unidades</div>
+                        <div class="card-value" id="dUnidades">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3><i class="fas fa-bell"></i> Alertas</h3>
+                <div id="alertas">Sin alertas.</div>
+            </div>
+
+            <div class="panel">
+                <h3><i class="fas fa-chart-bar"></i> Ventas por categoría</h3>
+                <div id="categorySummary">Cargando...</div>
+            </div>
+
+            <div class="panel">
+                <h3><i class="fas fa-chart-line"></i> Análisis</h3>
+                <div id="analisisContainer">Cargando...</div>
+            </div>
+        </section>
+
+        <!-- ===== VENTAS ===== -->
+        <section id="ventas" class="view">
+            <h2><i class="fas fa-cart-plus"></i> Nueva venta</h2>
+
+            <div class="panel">
+                <div class="scanner-btn-wrapper">
+                    <button class="scanner-btn" onclick="startScanner()">
+                        <i class="fas fa-camera"></i> Escanear código
+                    </button>
+                </div>
+
+                <div class="form-group">
+                    <label>Producto</label>
+                    <select id="saleProduct" onchange="updatePreview()"></select>
+                </div>
+
+                <div class="product-preview" id="productPreview">
+                    <div class="product-image" id="productImage">
+                        <i class="fas fa-cube"></i>
+                    </div>
+                    <div class="product-info">
+                        <div class="product-name" id="previewName">Seleccioná un producto</div>
+                        <div class="product-price" id="previewPrice">$0</div>
+                        <div class="product-stock" id="previewStock">Stock: 0</div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Cantidad</label>
+                    <div class="qty-selector">
+                        <button class="qty-btn" onclick="adjustQty(-1)"><i class="fas fa-minus"></i></button>
+                        <span class="qty-value" id="qtyDisplay">1</span>
+                        <button class="qty-btn" onclick="adjustQty(1)"><i class="fas fa-plus"></i></button>
+                    </div>
+                    <input type="hidden" id="saleQty" value="1">
+                </div>
+
+                <div class="form-group">
+                    <label>Precio</label>
+                    <input id="salePrice" type="number" min="0" step="0.01">
+                </div>
+
+                <button class="btn btn-primary btn-block" onclick="addToCart()">
+                    <i class="fas fa-plus"></i> Agregar al carrito
+                </button>
+            </div>
+
+            <div class="panel">
+                <h3><i class="fas fa-shopping-cart"></i> Carrito</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Producto</th>
+                                <th>Cant.</th>
+                                <th>Precio</th>
+                                <th>Subtotal</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="cart"></tbody>
+                    </table>
+                </div>
+                <div class="total">Total: <span id="cartTotal">$0</span></div>
+            </div>
+
+            <!-- ===== CLIENTE ===== -->
+            <div class="panel">
+                <h3><i class="fas fa-user"></i> Cliente (opcional)</h3>
+                <div class="form-group">
+                    <input id="clienteNombre" placeholder="Nombre del cliente">
+                </div>
+                <div class="form-group">
+                    <input id="clienteTelefono" placeholder="Teléfono">
+                </div>
+            </div>
+
+            <!-- ===== VUELTO ===== -->
+            <div class="panel">
+                <h3><i class="fas fa-cash-register"></i> Pago en efectivo</h3>
+                <div class="vuelto-wrapper">
+                    <input id="pagoEfectivo" type="number" min="0" step="0.01" placeholder="$0">
+                    <button class="btn btn-info" onclick="calcularVuelto()">
+                        <i class="fas fa-calculator"></i> Calcular
+                    </button>
+                    <span id="vueltoDisplay">$0</span>
+                </div>
+            </div>
+
+            <button class="btn btn-success btn-block" onclick="finishSale()">
+                <i class="fas fa-check"></i> Cobrar venta
+            </button>
+
+            <!-- ===== ENVIAR POR EMAIL ===== -->
+            <button class="btn btn-info btn-block" onclick="enviarResumenVenta()" style="margin-top:10px;">
+                <i class="fas fa-envelope"></i> Enviar resumen por email
+            </button>
+
+            <div class="panel">
+                <h3><i class="fas fa-qrcode"></i> Últimos escaneos</h3>
+                <div class="scan-log" id="scanLog">
+                    <div style="color:var(--l);text-align:center;padding:12px;">Sin escaneos</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== PRODUCTOS ===== -->
+        <section id="productos" class="view">
+            <h2><i class="fas fa-boxes"></i> Productos</h2>
+
+            <div class="panel">
+                <h3><i class="fas fa-plus-circle"></i> Agregar producto</h3>
+
+                <div class="form-group">
+                    <label>Nombre</label>
+                    <input id="pName" placeholder="Ej. Yerba 500g">
+                </div>
+
+                <div class="form-group">
+                    <label>Categoría</label>
+                    <input id="pCat" placeholder="Ej. Almacén" value="General">
+                </div>
+
+                <div class="form-group">
+                    <label>Precio</label>
+                    <input id="pPrice" type="number" step="0.01">
+                </div>
+
+                <div class="form-group">
+                    <label>Stock</label>
+                    <input id="pStock" type="number" min="0">
+                </div>
+
+                <div class="form-group">
+                    <label>Stock mínimo</label>
+                    <input id="pMinStock" type="number" min="0" value="3">
+                </div>
+
+                <div class="form-group">
+                    <label>Código de barras</label>
+                    <div style="display:flex;gap:6px;">
+                        <input id="pBarcode" placeholder="Ej. 7791234567890" style="flex:1;">
+                        <button class="btn btn-outline btn-sm" onclick="document.getElementById('pBarcode').value='BAR'+Date.now().toString().slice(-8)">
+                            <i class="fas fa-random"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Imagen del producto</label>
+                    <div class="image-upload" onclick="document.getElementById('pImageInput').click()">
+                        <i class="fas fa-cloud-upload-alt" style="font-size:24px;color:var(--a);"></i>
+                        <div style="margin-top:5px;">Tocá para seleccionar imagen</div>
+                        <img id="pImagePreview" style="display:none;max-width:100px;max-height:100px;border-radius:var(--s);margin-top:10px;">
+                    </div>
+                    <input id="pImageInput" type="file" accept="image/*" style="display:none" onchange="previewImage(event)">
+                    <input id="pImage" type="hidden">
+                </div>
+
+                <button class="btn btn-primary btn-block" onclick="addProduct()">
+                    <i class="fas fa-save"></i> Guardar producto
+                </button>
+            </div>
+
+            <div class="panel">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input id="productSearch" placeholder="Buscar producto..." oninput="renderProducts()">
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Imagen</th>
+                                <th>Producto</th>
+                                <th>Categoría</th>
+                                <th>Precio</th>
+                                <th>Stock</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="productTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== MOVIMIENTOS ===== -->
+        <section id="movimientos" class="view">
+            <h2><i class="fas fa-history"></i> Movimientos</h2>
+            <div class="panel">
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Producto</th>
+                                <th>Cantidad</th>
+                                <th>Total</th>
+                                <th>Cliente</th>
+                            </tr>
+                        </thead>
+                        <tbody id="moves"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== SYNC ===== -->
+        <section id="sync" class="view">
+            <h2><i class="fas fa-sync"></i> Sincronizar</h2>
+
+            <div class="panel">
+                <h3><i class="fas fa-github"></i> Configuración</h3>
+                <div class="form-group">
+                    <label>Usuario GitHub</label>
+                    <input id="githubUser" placeholder="tu-usuario" value="kioscoa220munro">
+                </div>
+                <div class="form-group">
+                    <label>Repositorio</label>
+                    <input id="githubRepo" placeholder="a220-data" value="a220-data">
+                </div>
+                <div class="form-group">
+                    <label>Token</label>
+                    <input id="githubToken" placeholder="ghp_xxxxx" type="password">
+                </div>
+                <div class="form-group">
+                    <label>Email para enviar reportes</label>
+                    <input id="emailReporte" placeholder="tucorreo@gmail.com">
+                </div>
+                <button class="btn btn-primary btn-block" onclick="saveConfig()">
+                    <i class="fas fa-save"></i> Guardar configuración
+                </button>
+            </div>
+
+            <div class="panel">
+                <h3><i class="fas fa-arrows-rotate"></i> Acciones</h3>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <button class="btn btn-success" onclick="syncToGitHub()">
+                        <i class="fas fa-upload"></i> Subir
+                    </button>
+                    <button class="btn btn-info" onclick="syncFromGitHub()">
+                        <i class="fas fa-download"></i> Descargar
+                    </button>
+                </div>
+                <div id="syncLog" style="margin-top:12px;font-size:12px;color:var(--l);border-top:1px solid var(--e);padding-top:10px;max-height:150px;overflow-y:auto;">
+                    <div>📡 Listo para sincronizar</div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <div class="app-footer">
+        A <strong>220</strong> Pro v2.0 · Gestión de Kiosco
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/scanner.js"></script>
+    <script src="js/github.js"></script>
+</body>
+</html>
