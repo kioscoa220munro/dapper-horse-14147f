@@ -4,17 +4,22 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>4D — Espacio · Movimiento · Tiempo</title>
-<link rel="stylesheet" href="./style.css?v=4d5">
+<link rel="stylesheet" href="./style.css?v=4d6">
 </head>
 <body>
-<header><b>4D</b><span>ESPACIO · MOVIMIENTO · TIEMPO</span><em>MOTOR 4D · v5</em></header>
+<header><b>4D</b><span>ESPACIO · MOVIMIENTO · TIEMPO</span><em>MOTOR 4D · v6</em></header>
 <main>
 <section class="hero">
   <div>
     <p class="eyebrow">ESPACIO-TIEMPO 4D</p>
     <h1>Convertí un video en una escena 3D navegable en el tiempo.</h1>
     <p>El navegador construye una superficie espacial dinámica a partir de los fotogramas del video, la texturiza con la imagen real y permite recorrer espacio, cámara y tiempo.</p>
-    <label class="upload"><input id="video" type="file" accept="video/*"><strong>📹 Seleccionar video</strong><small>El video se procesa localmente en tu dispositivo.</small></label>
+    <div class="upload" id="videoPicker">
+  <button type="button" id="pickVideo">📹 Seleccionar video del celular</button>
+  <input id="video" type="file" accept="video/*,.mp4,.mov,.m4v,.3gp,.webm" hidden>
+  <strong id="selectedFile">Ningún video seleccionado</strong>
+  <small>Elegí un video existente de Galería/Archivos.</small>
+</div>
   </div>
   <div class="orb"><span>4D</span><i>SPACE<br>TIME</i></div>
 </section>
@@ -51,6 +56,6 @@
   <p class="notice"><b>Motor navegador:</b> reconstrucción visual 3D temporal con malla texturizada y profundidad estimada por fotograma. La capa métrica COLMAP/3DGS/4DGS requiere procesamiento GPU de backend y queda preparada como siguiente etapa del pipeline.</p>
 </section>
 </main>
-<script type="module" src="./app.js?v=4d5"></script>
+<script type="module" src="./app.js?v=4d6"></script>
 </body>
 </html>
