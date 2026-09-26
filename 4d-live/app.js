@@ -4,6 +4,10 @@ import {OrbitControls} from "https://cdn.jsdelivr.net/npm/three@0.180.0/examples
 const $=id=>document.getElementById(id);
 const input=$("video"), preview=$("preview"), workspace=$("workspace"), timeline=$("timeline"), host=$("scene");
 const LOAD_TIMEOUT=15000;
+const pickVideo=$("pickVideo");
+const selectedFile=$("selectedFile");
+pickVideo?.addEventListener("click",()=>input?.click());
+
 let loadTimer=0;
 let objectURL=null, renderer, scene, camera, controls, mesh, texture, raf=0, playing=false, lastDepthUpdate=0;
 let depthCanvas, depthCtx, geometry, cols=96, rows=54;
@@ -106,6 +110,7 @@ input.onchange=()=>{
   clearTimeout(loadTimer);
   setState("Leyendo video del celular…");
   $("fileName").textContent=f.name;
+  if(selectedFile) selectedFile.textContent=f.name+" · "+(f.size/1048576).toFixed(1)+" MB";
   $("frames").textContent="0";
   $("points").textContent="0";
 
