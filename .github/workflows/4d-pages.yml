@@ -1,9 +1,9 @@
 name: Deploy 4D to GitHub Pages
 on:
   push:
-    branches: ["main"]
+    branches: ["4d-pages"]
     paths:
-      - "4d/**"
+      - "4d-live/**"
       - ".github/workflows/4d-pages.yml"
   workflow_dispatch:
 permissions:
@@ -27,7 +27,7 @@ jobs:
       - name: Upload 4D
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./4d
+          path: ./4d-live
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
