@@ -59,29 +59,40 @@
 
 <script>
 (() => {
-  const input = document.getElementById("video");
-  const button = document.getElementById("pickVideo");
-  const selected = document.getElementById("selectedFile");
-  const preview = document.getElementById("preview");
-  const workspace = document.getElementById("workspace");
-
-  button.addEventListener("click", () => input.click());
-
-  input.addEventListener("change", () => {
-    const file = input.files && input.files[0];
-    if (!file) return;
-
-    const url = URL.createObjectURL(file);
-    preview.src = url;
-    preview.load();
-    workspace.classList.remove("hidden");
-    selected.textContent = file.name + " · " + (file.size / 1048576).toFixed(1) + " MB";
-
-    window.dispatchEvent(new CustomEvent("a220-video-selected", {
-      detail: { file, url }
-    }));
+  const DB="a220-4d-video", STORE="files";
+  const openDB=()=>new Promise((resolve,reject)=>{
+    const r=indexedDB.open(DB,1);
+    r.onupgradeneeded=()=>r.result.createObjectStore(STORE);
+    r.onsuccess=()=>resolve(r.result); r.onerror=()=>reject(r.error);
+  });
+  const saveFile=async file=>{try{const db=await openDB();const tx=db.transaction(STORE,"readwrite");tx.objectStore(STORE).put(file,"current");await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=()=>rej(tx.error)}); }catch(e){console.warn("No se pudo guardar el video",e)}};
+  const loadFile=async()=>{try{const db=await openDB();return await new Promise((res,rej)=>{const r=db.transaction(STORE).objectStore(STORE).get("current");r.onsuccess=()=>res(r.result||null);r.onerror=()=>rej(r.error)})}catch(e){return null}};
+  const emit=(file)=>{
+    if(!file)return;
+    const url=URL.createObjectURL(file);
+    document.getElementById("preview").src=url;
+    document.getElementById("preview").load();
+    document.getElementById("workspace").classList.remove("hidden");
+    document.getElementById("selectedFile").textContent=file.name+" · "+(file.size/1048576).toFixed(1)+" MB";
+    window.dispatchEvent(new CustomEvent("a220-video-selected",{detail:{file,url}}));
+  };
+  const input=document.getElementById("video"),button=document.getElementById("pickVideo"),reset=document.getElementById("reset");
+  button.addEventListener("click",()=>input.click());
+  input.addEventListener("change",async()=>{
+    const file=input.files?.[0]; if(!file)return;
+    await saveFile(file); emit(file);
+  });
+  reset.addEventListener("click",async()=>{
+    try{const db=await openDB();const tx=db.transaction(STORE,"readwrite");tx.objectStore(STORE).delete("current");}catch(e){}
+    input.value=""; document.getElementById("workspace").classList.add("hidden");
+    document.getElementById("selectedFile").textContent="Ningún video seleccionado";
+    document.getElementById("preview").removeAttribute("src");
+  });
+  window.addEventListener("DOMContentLoaded",async()=>{
+    const file=await loadFile(); if(file)emit(file);
   });
 })();
+</script>
 </script>
 <script type="module" src="./app.js?v=4d7"></script>
 </body>
