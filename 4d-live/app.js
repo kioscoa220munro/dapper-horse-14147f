@@ -26,7 +26,6 @@ function handleVideo(file,url=null){
 }
 
 window.addEventListener("a220-video-selected",e=>handleVideo(e.detail.file,e.detail.url));
-input.addEventListener("change",()=>{const f=input.files?.[0];if(f)handleVideo(f);});
 
 preview.addEventListener("loadedmetadata",()=>{
   const d=Number.isFinite(preview.duration)?preview.duration:0;
