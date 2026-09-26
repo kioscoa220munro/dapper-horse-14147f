@@ -4,9 +4,7 @@ import {OrbitControls} from "https://cdn.jsdelivr.net/npm/three@0.180.0/examples
 const $=id=>document.getElementById(id);
 const input=$("video"), preview=$("preview"), workspace=$("workspace"), timeline=$("timeline"), host=$("scene");
 const LOAD_TIMEOUT=15000;
-const pickVideo=$("pickVideo");
 const selectedFile=$("selectedFile");
-pickVideo?.addEventListener("click",()=>input?.click());
 
 let loadTimer=0;
 let objectURL=null, renderer, scene, camera, controls, mesh, texture, raf=0, playing=false, lastDepthUpdate=0;
@@ -46,7 +44,8 @@ function init3D(){
   );
   scene.add(frame);
   depthCanvas=document.createElement("canvas");
-  depthCanvas.width=cols; depthCanvas.height=rows; depthCtx=depthCanvas.getContext("2d",{willReadFrequently:true});
+  depthCanvas.width=cols; depthCanvas.height=rows;
+  depthCtx=depthCanvas.getContext("2d",{willReadFrequently:true});
   resize();
   animate();
 }
@@ -71,8 +70,7 @@ function rebuildDepth(force=false){
       const lum=(px[i]*.2126+px[i+1]*.7152+px[i+2]*.0722)/255;
       const edge=Math.sin((x/cols)*Math.PI)*Math.sin((y/rows)*Math.PI);
       const motion=.18*Math.sin((preview.currentTime||0)*2.2+x*.035+y*.018);
-      const z=(lum-.5)*2.0*edge+motion;
-      pos.setZ(y*cols+x,z);
+      pos.setZ(y*cols+x,(lum-.5)*2.0*edge+motion);
     }
   }
   pos.needsUpdate=true;
@@ -103,33 +101,38 @@ async function analyze(){
   $("state").textContent="Escena 4D navegable lista";
 }
 
-input.onchange=()=>{
-  const f=input.files?.[0];
-  if(!f)return;
-  const setState=(msg)=>{ $("state").textContent=msg; };
+function handleVideo(file,urlFromPicker=null){
+  if(!file)return;
+  const setState=msg=>$("state").textContent=msg;
   clearTimeout(loadTimer);
   setState("Leyendo video del celular…");
-  $("fileName").textContent=f.name;
-  if(selectedFile) selectedFile.textContent=f.name+" · "+(f.size/1048576).toFixed(1)+" MB";
+  $("fileName").textContent=file.name;
+  if(selectedFile)selectedFile.textContent=file.name+" · "+(file.size/1048576).toFixed(1)+" MB";
   $("frames").textContent="0";
   $("points").textContent="0";
 
-  if(objectURL)URL.revokeObjectURL(objectURL);
-  preview.pause();
-  preview.removeAttribute("src");
-  preview.load();
+  if(objectURL && objectURL!==urlFromPicker)URL.revokeObjectURL(objectURL);
+  objectURL=urlFromPicker || URL.createObjectURL(file);
 
-  objectURL=URL.createObjectURL(f);
+  preview.pause();
   preview.src=objectURL;
   preview.preload="metadata";
   workspace.classList.remove("hidden");
   preview.load();
 
   loadTimer=setTimeout(()=>{
-    if(!Number.isFinite(preview.duration) || preview.duration===0){
-      setState("El video no respondió. Probá MP4 H.264.");
-    }
+    if(!Number.isFinite(preview.duration)||preview.duration===0)
+      setState("El video no respondió. El archivo puede usar un códec no compatible.");
   },LOAD_TIMEOUT);
+}
+
+window.addEventListener("a220-video-selected",event=>{
+  handleVideo(event.detail.file,event.detail.url);
+});
+
+input.onchange=()=>{
+  const f=input.files?.[0];
+  if(f)handleVideo(f);
 };
 
 preview.onloadedmetadata=()=>{
@@ -149,10 +152,10 @@ preview.onloadedmetadata=()=>{
   $("state").textContent="Video cargado · listo para reconstruir";
 };
 
-preview.onloadeddata=()=>{ rebuildDepth(true); };
+preview.onloadeddata=()=>rebuildDepth(true);
 
 preview.oncanplay=()=>{
-  if(preview.readyState>=3 && renderer) rebuildDepth(true);
+  if(preview.readyState>=3&&renderer)rebuildDepth(true);
 };
 
 preview.onstalled=()=>{
@@ -162,8 +165,6 @@ preview.onstalled=()=>{
 
 preview.onerror=()=>{
   const code=preview.error?.code;
-  const detail=code===4
-    ?"Formato o códec no compatible. Usá MP4 H.264."
-    :"No se pudo leer el archivo de video.";
+  const detail=code===4?"Formato o códec no compatible.":"No se pudo leer el archivo de video.";
   $("state").textContent="Error de video: "+detail;
 };
