@@ -57,125 +57,94 @@ timeline.addEventListener("input",()=>{if(isFinite(preview.duration))preview.cur
 
 let camera={yaw:0,pitch:0,distance:3.2,panX:0,panY:0};
 let nav={drag:false,lastX:0,lastY:0,pointers:new Map(),pinch:0};
-let depthCanvas=null,depthCtx=null,points3d=[];
-function setupCanvas(){
-  if(sceneCanvas)return;
-  sceneCanvas=document.createElement("canvas");
-  sceneCanvas.className="sceneCanvas";
-  sceneCanvas.style.touchAction="none";
-  sceneHost.innerHTML="";
-  sceneHost.appendChild(sceneCanvas);
-  sceneCtx=sceneCanvas.getContext("2d");
-  depthCanvas=document.createElement("canvas");
-  depthCanvas.width=96; depthCanvas.height=54;
-  depthCtx=depthCanvas.getContext("2d",{willReadFrequently:true});
-  resizeCanvas();
-  window.addEventListener("resize",resizeCanvas);
-  sceneCanvas.addEventListener("pointerdown",navDown);
-  sceneCanvas.addEventListener("pointermove",navMove);
-  sceneCanvas.addEventListener("pointerup",navUp);
-  sceneCanvas.addEventListener("pointercancel",navUp);
-  sceneCanvas.addEventListener("wheel",navWheel,{passive:false});
-}
-function resizeCanvas(){
+
+function navSurface(){
   if(!sceneCanvas)return;
-  const r=sceneHost.getBoundingClientRect();
-  const w=Math.max(320,Math.floor(r.width)),h=Math.max(220,Math.floor(r.height));
-  const d=Math.min(window.devicePixelRatio||1,2);
-  sceneCanvas.width=w*d;sceneCanvas.height=h*d;
-  sceneCanvas.style.width=w+"px";sceneCanvas.style.height=h+"px";
-  sceneCtx.setTransform(d,0,0,d,0,0);
+  sceneCanvas.style.touchAction="none";
+  sceneCanvas.onpointerdown=navDown;
+  sceneCanvas.onpointermove=navMove;
+  sceneCanvas.onpointerup=navUp;
+  sceneCanvas.onpointercancel=navUp;
+  sceneCanvas.onpointerleave=navUp;
+  sceneCanvas.onwheel=navWheel;
+  sceneCanvas.ontouchstart=()=>{};
 }
 function navDown(e){
-  sceneCanvas.setPointerCapture?.(e.pointerId);
+  e.preventDefault();
   nav.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  if(nav.pointers.size===1){
-    nav.drag=true;nav.lastX=e.clientX;nav.lastY=e.clientY;
-  }else if(nav.pointers.size===2){
-    const a=[...nav.pointers.values()];
-    nav.pinch=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
+  try{sceneCanvas.setPointerCapture(e.pointerId);}catch(_){}
+  if(nav.pointers.size===1){nav.drag=true;nav.lastX=e.clientX;nav.lastY=e.clientY;}
+  else if(nav.pointers.size===2){
+    const v=[...nav.pointers.values()];
+    nav.pinch=Math.hypot(v[0].x-v[1].x,v[0].y-v[1].y);
   }
 }
 function navMove(e){
   if(!nav.pointers.has(e.pointerId))return;
+  e.preventDefault();
   nav.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(nav.pointers.size===2){
-    const a=[...nav.pointers.values()];
-    const dist=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
-    if(nav.pinch>0) camera.distance=Math.max(1.25,Math.min(8,camera.distance*(nav.pinch/dist)));
-    nav.pinch=dist;
-    return;
+    const v=[...nav.pointers.values()];
+    const d=Math.hypot(v[0].x-v[1].x,v[0].y-v[1].y);
+    if(nav.pinch>0)camera.distance=Math.max(1.1,Math.min(10,camera.distance*(nav.pinch/d)));
+    nav.pinch=d; return;
   }
-  if(!nav.drag)return;
-  const dx=e.clientX-nav.lastX,dy=e.clientY-nav.lastY;
-  nav.lastX=e.clientX;nav.lastY=e.clientY;
-  camera.yaw+=dx*.009;
-  camera.pitch=Math.max(-1.15,Math.min(1.15,camera.pitch+dy*.009));
+  if(nav.drag){
+    camera.yaw+=(e.clientX-nav.lastX)*0.014;
+    camera.pitch=Math.max(-1.35,Math.min(1.35,camera.pitch+(e.clientY-nav.lastY)*0.014));
+    nav.lastX=e.clientX;nav.lastY=e.clientY;
+  }
 }
-function navUp(e){
-  nav.pointers.delete(e.pointerId);
-  if(nav.pointers.size===0)nav.drag=false;
-  if(nav.pointers.size<2)nav.pinch=0;
+function navUp(e){nav.pointers.delete(e.pointerId);if(nav.pointers.size===0)nav.drag=false;if(nav.pointers.size<2)nav.pinch=0;}
+function navWheel(e){e.preventDefault();camera.distance=Math.max(1.1,Math.min(10,camera.distance*Math.exp(e.deltaY*.0015)));}
+
+function setupCanvas(){
+  if(sceneCanvas)return;
+  sceneCanvas=document.createElement("canvas");
+  sceneCanvas.className="sceneCanvas";
+  sceneCanvas.style.cssText="width:100%;height:100%;display:block;touch-action:none;cursor:grab;";
+  sceneHost.innerHTML="";
+  sceneHost.appendChild(sceneCanvas);
+  sceneCtx=sceneCanvas.getContext("2d");
+  resizeCanvas();
+  window.addEventListener("resize",resizeCanvas);
+  navSurface();
 }
-function navWheel(e){
-  e.preventDefault();
-  camera.distance=Math.max(1.25,Math.min(8,camera.distance*Math.exp(e.deltaY*.001)));
+function resizeCanvas(){
+  if(!sceneCanvas)return;
+  const r=sceneHost.getBoundingClientRect(),w=Math.max(320,Math.floor(r.width)),h=Math.max(220,Math.floor(r.height));
+  const d=Math.min(devicePixelRatio||1,2);
+  sceneCanvas.width=w*d;sceneCanvas.height=h*d;sceneCtx.setTransform(d,0,0,d,0,0);
 }
 function buildPointCloud(){
-  if(!preview.videoWidth||preview.readyState<2||!depthCtx)return;
-  try{
-    depthCtx.drawImage(preview,0,0,96,54);
-    const data=depthCtx.getImageData(0,0,96,54).data;
-    points3d=[];
-    for(let y=0;y<54;y++)for(let x=0;x<96;x++){
-      const i=(y*96+x)*4;
-      const r=data[i],g=data[i+1],b=data[i+2];
-      const lum=(.2126*r+.7152*g+.0722*b)/255;
-      const xx=(x/95-.5)*3.2;
-      const yy=(.5-y/53)*1.8;
-      const z=(lum-.5)*.95;
-      points3d.push({x:xx,y:yy,z,r,g,b});
-    }
-  }catch(e){}
+  if(!preview.videoWidth||preview.readyState<2)return;
+  const c=document.createElement("canvas");c.width=80;c.height=45;
+  const x=c.getContext("2d",{willReadFrequently:true});x.drawImage(preview,0,0,80,45);
+  const d=x.getImageData(0,0,80,45).data;points3d=[];
+  for(let y=0;y<45;y++)for(let xx=0;xx<80;xx++){
+    const i=(y*80+xx)*4,r=d[i],g=d[i+1],bb=d[i+2],lum=(.2126*r+.7152*g+.0722*bb)/255;
+    points3d.push({x:(xx/79-.5)*3.4,y:(.5-y/44)*2,z:(lum-.5)*1.2,r,g,b:bb});
+  }
 }
 function projectPoint(p,w,h){
-  let x=p.x,y=p.y,z=p.z;
-  const cy=Math.cos(camera.yaw),sy=Math.sin(camera.yaw);
-  const cp=Math.cos(camera.pitch),sp=Math.sin(camera.pitch);
-  const x1=x*cy-z*sy, z1=x*sy+z*cy;
-  const y1=y*cp-z1*sp, z2=y*sp+z1*cp;
-  const depth=camera.distance-z2;
-  if(depth<=.15)return null;
-  const f=1.7/depth;
-  return {x:w/2+camera.panX+x1*f*w*.36,y:h/2+camera.panY-y1*f*h*.44,scale:f};
+  const cy=Math.cos(camera.yaw),sy=Math.sin(camera.yaw),cp=Math.cos(camera.pitch),sp=Math.sin(camera.pitch);
+  const x=p.x*cy-p.z*sy,z1=p.x*sy+p.z*cy,y=p.y*cp-z1*sp,z=p.y*sp+z1*cp,depth=camera.distance-z;
+  if(depth<=.12)return null;
+  const f=1.8/depth;
+  return {x:w/2+camera.panX+x*f*w*.34,y:h/2+camera.panY-y*f*h*.43,s:Math.max(.7,Math.min(5,1.4*f)),z};
 }
 function drawScene(){
   if(!preview.videoWidth||preview.readyState<2)return;
   setupCanvas();
-  if(!points3d.length || Math.abs((points3d._t||-1)-(preview.currentTime||0))>.08){
-    buildPointCloud();
-    points3d._t=preview.currentTime||0;
-  }
+  if(!points3d.length||Math.abs((points3d._t??-99)-(preview.currentTime||0))>.12){buildPointCloud();points3d._t=preview.currentTime||0;}
   const w=sceneCanvas.clientWidth,h=sceneCanvas.clientHeight;
-  sceneCtx.clearRect(0,0,w,h);
-  sceneCtx.fillStyle="#030407";sceneCtx.fillRect(0,0,w,h);
-  const projected=[];
-  for(const p of points3d){
-    const q=projectPoint(p,w,h);
-    if(q)projected.push({...q,p});
-  }
-  projected.sort((a,b)=>a.scale-b.scale);
-  for(const q of projected){
-    const size=Math.max(.8,Math.min(4.2,1.15*q.scale));
-    sceneCtx.fillStyle="rgb("+q.p.r+","+q.p.g+","+q.p.b+")";
-    sceneCtx.fillRect(q.x,q.y,size,size);
-  }
-  sceneCtx.strokeStyle="rgba(80,220,255,.45)";
-  sceneCtx.strokeRect(8,8,w-16,h-16);
-  sceneCtx.fillStyle="rgba(80,220,255,.95)";
-  sceneCtx.font="12px sans-serif";
+  sceneCtx.clearRect(0,0,w,h);sceneCtx.fillStyle="#030407";sceneCtx.fillRect(0,0,w,h);
+  const p=points3d.map(v=>{const q=projectPoint(v,w,h);return q?{q,v}:null}).filter(Boolean).sort((a,b)=>a.q.z-b.q.z);
+  for(const o of p){sceneCtx.fillStyle="rgb("+o.v.r+","+o.v.g+","+o.v.b+")";sceneCtx.fillRect(o.q.x,o.q.y,o.q.s,o.q.s);}
+  sceneCtx.strokeStyle="rgba(80,220,255,.5)";sceneCtx.strokeRect(8,8,w-16,h-16);
+  sceneCtx.fillStyle="#fff";sceneCtx.font="12px sans-serif";
   sceneCtx.fillText("4D · t="+(preview.currentTime||0).toFixed(2)+"s",14,24);
-  sceneCtx.fillText("ORBITA · ZOOM · ARRASTRA",14,h-14);
+  sceneCtx.fillText("DESLIZÁ PARA ORBITAR · 2 DEDOS PARA ZOOM",14,h-14);
 }
 function loop(){drawScene();raf=requestAnimationFrame(loop);}
 setupCanvas();loop();
