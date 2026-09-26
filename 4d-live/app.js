@@ -3,6 +3,8 @@ import {OrbitControls} from "https://cdn.jsdelivr.net/npm/three@0.180.0/examples
 
 const $=id=>document.getElementById(id);
 const input=$("video"), preview=$("preview"), workspace=$("workspace"), timeline=$("timeline"), host=$("scene");
+const LOAD_TIMEOUT=15000;
+let loadTimer=0;
 let objectURL=null, renderer, scene, camera, controls, mesh, texture, raf=0, playing=false, lastDepthUpdate=0;
 let depthCanvas, depthCtx, geometry, cols=96, rows=54;
 
@@ -97,4 +99,18 @@ async function analyze(){
   $("state").textContent="Escena 4D navegable lista";
 }
 
-input.onchange=()=>{\n  const f=input.files?.[0];\n  if(!f)return;\n  const setState=(msg)=>{ $("state").textContent=msg; };\n  setState("Cargando video…");\n  $("fileName").textContent=f.name;\n  $("frames").textContent="0";\n  $("points").textContent="0";\n  if(objectURL)URL.revokeObjectURL(objectURL);\n  preview.pause();\n  preview.removeAttribute("src");\n  preview.load();\n  objectURL=URL.createObjectURL(f);\n  preview.src=objectURL;\n  preview.load();\n  workspace.classList.remove("hidden");\n};\n\npreview.onloadedmetadata=()=>{\n  const d=Number.isFinite(preview.duration)?preview.duration:0;\n  if(!d){ $("state").textContent="No se pudo leer la duración del video."; return; }\n  $("duration").textContent=d.toFixed(2)+" s";\n  timeline.min=0;\n  timeline.max=d;\n  timeline.value=0;\n  $("frames").textContent=Math.max(1,Math.ceil(d*5));\n  if(!renderer)init3D(); else resize();\n  preview.currentTime=0;\n  $("state").textContent="Video cargado · listo para reconstruir";\n};\n\npreview.oncanplay=()=>{\n  if(preview.readyState>=3 && renderer) rebuildDepth(true);\n};\n\npreview.onerror=()=>{\n  const code=preview.error?.code;\n  const detail=code===4?"Formato o códec no compatible en este navegador.":"No se pudo leer el archivo.";\n  $("state").textContent="Error de video: "+detail;\n};\n\n
+input.onchange=()=>{\n  const f=input.files?.[0];\n  if(!f)return;\n  const setState=(msg)=>{ $("state").textContent=msg; };\n  clearTimeout(loadTimer);
+  setState("Leyendo MP4…");
+  if(!/^video\\//.test(f.type) && !/\\.mp4$/i.test(f.name)){
+    setState("Elegí un archivo MP4 de video.");
+    return;
+  }
+  const probe=document.createElement("video");
+  const mime=f.type||"video/mp4";
+  const support=probe.canPlayType(mime);
+  if(support===""){
+    setState("Este navegador no declara compatibilidad con "+mime+". Probá MP4 H.264.");
+  }\n  $("fileName").textContent=f.name;\n  $("frames").textContent="0";\n  $("points").textContent="0";\n  if(objectURL)URL.revokeObjectURL(objectURL);\n  preview.pause();\n  preview.removeAttribute("src");\n  preview.load();\n  objectURL=URL.createObjectURL(f);\n  preview.src=objectURL;\n  preview.load();\n  workspace.classList.remove("hidden");\n};\n\npreview.onloadedmetadata=()=>{
+  clearTimeout(loadTimer);\n  const d=Number.isFinite(preview.duration)?preview.duration:0;\n  if(!d){ $("state").textContent="No se pudo leer la duración del video."; return; }\n  $("duration").textContent=d.toFixed(2)+" s";\n  timeline.min=0;\n  timeline.max=d;\n  timeline.value=0;\n  $("frames").textContent=Math.max(1,Math.ceil(d*5));\n  if(!renderer)init3D(); else resize();\n  preview.currentTime=0;\n  $("state").textContent="Video cargado · listo para reconstruir";\n};\n\npreview.onloadeddata=()=>{ rebuildDepth(true); };
+preview.oncanplay=()=>{\n  if(preview.readyState>=3 && renderer) rebuildDepth(true);\n};\n\npreview.onstalled=()=>{ if(!Number.isFinite(preview.duration)) $("state").textContent="Carga detenida… esperando datos del MP4."; };
+preview.onerror=()=>{\n  const code=preview.error?.code;\n  const detail=code===4?"Formato o códec no compatible en este navegador.":"No se pudo leer el archivo.";\n  $("state").textContent="Error de video: "+detail;\n};\n\n
