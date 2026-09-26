@@ -1,1 +1,129 @@
-const $=id=>document.getElementById(id);const input=$("video"),preview=$("preview"),workspace=$("workspace"),timeline=$("timeline"),canvas=$("scene"),ctx=canvas.getContext("2d");let objectURL=null,points=[],yaw=.35,pitch=-.15,zoom=1,drag=false,lx=0,ly=0,playing=false,raf=0;function resize(){const r=canvas.getBoundingClientRect(),d=devicePixelRatio||1;canvas.width=r.width*d;canvas.height=r.height*d;ctx.setTransform(d,0,0,d,0,0);draw()}addEventListener("resize",resize);function makePoints(){points=[];for(let i=0;i<1400;i++){const a=i/1400*Math.PI*14,r=40+Math.random()*260;points.push({x:Math.cos(a)*r+Math.sin(a*1.7)*18,y:Math.sin(a)*r*.58,z:Math.sin(a*1.3)*90+(Math.random()-.5)*45,s:1+Math.random()*2})}$("points").textContent=points.length}function project(p){let{x,y,z}=p;const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);let X=x*cy-z*sy,Z=x*sy+z*cy,Y=y*cp-Z*sp;Z=y*sp+Z*cp;const f=430*zoom/(430+Z);return[canvas.clientWidth/2+X*f,canvas.clientHeight/2+Y*f,f]}function draw(){if(!canvas.clientWidth)return;ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight);const t=preview.currentTime||0;for(const p of points){const q=project(p);if(q[0]<-5||q[0]>canvas.clientWidth+5||q[1]<-5||q[1]>canvas.clientHeight+5)continue;const motion=Math.sin(t*2+p.x*.01)*.5+.5;ctx.globalAlpha=Math.max(.12,Math.min(1,q[2]));ctx.beginPath();ctx.arc(q[0],q[1],Math.max(.5,p.s*q[2]*.7),0,Math.PI*2);ctx.fillStyle="rgb("+Math.floor(80+130*motion)+","+Math.floor(110+110*motion)+","+Math.floor(160+80*motion)+")";ctx.fill()}ctx.globalAlpha=1;$("viewerTime").textContent="t = "+t.toFixed(2)+" s";if(playing)raf=requestAnimationFrame(draw)}function analyze(){$("state").textContent="Analizando muestras…";["p3","p4","p5","p6","p7"].forEach((id,i)=>setTimeout(()=>$(id).classList.add("active"),500+i*500));makePoints();setTimeout(()=>{$("state").textContent="Escena 4D de prueba lista";draw()},3000)}input.onchange=()=>{const f=input.files[0];if(!f)return;if(objectURL)URL.revokeObjectURL(objectURL);objectURL=URL.createObjectURL(f);preview.src=objectURL;$("fileName").textContent=f.name;workspace.classList.remove("hidden");$("state").textContent="Video cargado";preview.onloadedmetadata=()=>{const d=preview.duration||0;$("duration").textContent=d.toFixed(2)+" s";timeline.max=d;$("frames").textContent=Math.ceil(d*5);resize();makePoints();analyze()}};timeline.oninput=()=>{preview.currentTime=+timeline.value;draw();$("time").textContent=(+timeline.value).toFixed(2)+" s"};preview.ontimeupdate=()=>{timeline.value=preview.currentTime;$("time").textContent=preview.currentTime.toFixed(2)+" s";draw()};$("play4d").onclick=()=>{playing=!playing;$("play4d").textContent=playing?"⏸ Pausar 4D":"▶ Reproducir 4D";if(playing){preview.play();draw()}else preview.pause()};$("analyze").onclick=analyze;canvas.onpointerdown=e=>{drag=true;lx=e.clientX;ly=e.clientY;canvas.setPointerCapture(e.pointerId)};canvas.onpointermove=e=>{if(!drag)return;yaw+=(e.clientX-lx)*.008;pitch+=(e.clientY-ly)*.008;pitch=Math.max(-1.4,Math.min(1.4,pitch));lx=e.clientX;ly=e.clientY;draw()};canvas.onpointerup=()=>drag=false;canvas.onwheel=e=>{e.preventDefault();zoom*=e.deltaY<0?1.1:.9;zoom=Math.max(.35,Math.min(3,zoom));draw()};$("reset").onclick=()=>location.reload();resize();
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js";
+import {OrbitControls} from "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/controls/OrbitControls.js";
+
+const $=id=>document.getElementById(id);
+const input=$("video"), preview=$("preview"), workspace=$("workspace"), timeline=$("timeline"), host=$("scene");
+let objectURL=null, renderer, scene, camera, controls, mesh, texture, raf=0, playing=false, lastDepthUpdate=0;
+let depthCanvas, depthCtx, geometry, cols=96, rows=54;
+
+function init3D(){
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(0x030407);
+  camera=new THREE.PerspectiveCamera(48,1,.01,100);
+  camera.position.set(0,1.5,13);
+  renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:false});
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+  renderer.outputColorSpace=THREE.SRGBColorSpace;
+  host.innerHTML="";
+  host.appendChild(renderer.domElement);
+  controls=new OrbitControls(camera,renderer.domElement);
+  controls.enableDamping=true;
+  controls.minDistance=5;
+  controls.maxDistance=24;
+  controls.target.set(0,0,0);
+
+  const light=new THREE.DirectionalLight(0xffffff,1.8); light.position.set(3,6,8); scene.add(light);
+  scene.add(new THREE.AmbientLight(0xffffff,.65));
+
+  geometry=new THREE.PlaneGeometry(12,6.75,cols-1,rows-1);
+  texture=new THREE.VideoTexture(preview);
+  texture.colorSpace=THREE.SRGBColorSpace;
+  texture.minFilter=THREE.LinearFilter;
+  texture.magFilter=THREE.LinearFilter;
+  const mat=new THREE.MeshStandardMaterial({map:texture,roughness:.72,metalness:.02,side:THREE.DoubleSide});
+  mesh=new THREE.Mesh(geometry,mat);
+  scene.add(mesh);
+
+  const frame=new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(12.5,7.2,2.5)),
+    new THREE.LineBasicMaterial({color:0x273140,transparent:true,opacity:.35})
+  );
+  scene.add(frame);
+  depthCanvas=document.createElement("canvas");
+  depthCanvas.width=cols; depthCanvas.height=rows; depthCtx=depthCanvas.getContext("2d",{willReadFrequently:true});
+  resize();
+  animate();
+}
+
+function resize(){
+  if(!renderer)return;
+  const r=host.getBoundingClientRect(),w=Math.max(1,r.width),h=Math.max(1,r.height);
+  renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix();
+}
+
+function rebuildDepth(force=false){
+  if(!depthCtx||!preview.videoWidth||preview.readyState<2)return;
+  const now=performance.now();
+  if(!force && now-lastDepthUpdate<90)return;
+  lastDepthUpdate=now;
+  depthCtx.drawImage(preview,0,0,cols,rows);
+  const px=depthCtx.getImageData(0,0,cols,rows).data;
+  const pos=geometry.attributes.position;
+  for(let y=0;y<rows;y++){
+    for(let x=0;x<cols;x++){
+      const i=(y*cols+x)*4;
+      const lum=(px[i]*.2126+px[i+1]*.7152+px[i+2]*.0722)/255;
+      const edge=Math.sin((x/cols)*Math.PI)*Math.sin((y/rows)*Math.PI);
+      const motion=.18*Math.sin((preview.currentTime||0)*2.2+x*.035+y*.018);
+      const z=(lum-.5)*2.0*edge+motion;
+      pos.setZ(y*cols+x,z);
+    }
+  }
+  pos.needsUpdate=true;
+  $("points").textContent=String(cols*rows);
+}
+
+function animate(){
+  raf=requestAnimationFrame(animate);
+  rebuildDepth();
+  controls?.update();
+  if(texture)texture.needsUpdate=true;
+  if(preview.duration)timeline.value=preview.currentTime;
+  $("time").textContent=(preview.currentTime||0).toFixed(2)+" s";
+  $("viewerTime").textContent="t = "+(preview.currentTime||0).toFixed(2)+" s";
+  renderer?.render(scene,camera);
+}
+
+function activatePipeline(){
+  ["p3","p4","p5","p6","p7"].forEach((id,i)=>setTimeout(()=>$(id).classList.add("active"),350+i*500));
+  $("state").textContent="Reconstrucción 3D temporal lista";
+}
+
+async function analyze(){
+  $("state").textContent="Analizando fotogramas y reconstruyendo profundidad…";
+  activatePipeline();
+  rebuildDepth(true);
+  await new Promise(r=>setTimeout(r,2800));
+  $("state").textContent="Escena 4D navegable lista";
+}
+
+input.onchange=()=>{
+  const f=input.files[0]; if(!f)return;
+  if(objectURL)URL.revokeObjectURL(objectURL);
+  objectURL=URL.createObjectURL(f);
+  preview.src=objectURL;
+  $("fileName").textContent=f.name;
+  workspace.classList.remove("hidden");
+  preview.onloadedmetadata=()=>{
+    const d=preview.duration||0;
+    $("duration").textContent=d.toFixed(2)+" s";
+    timeline.max=d;
+    $("frames").textContent=Math.max(1,Math.ceil(d*5));
+    if(!renderer)init3D(); else resize();
+    rebuildDepth(true);
+    analyze();
+  };
+};
+
+timeline.oninput=()=>{preview.currentTime=+timeline.value;rebuildDepth(true)};
+preview.ontimeupdate=()=>{timeline.value=preview.currentTime;$("time").textContent=preview.currentTime.toFixed(2)+" s";};
+$("play4d").onclick=async()=>{
+  playing=!playing;
+  $("play4d").textContent=playing?"⏸ Pausar 4D":"▶ Reproducir 4D";
+  if(playing)await preview.play(); else preview.pause();
+};
+preview.onplay=()=>{playing=true;$("play4d").textContent="⏸ Pausar 4D"};
+preview.onpause=()=>{playing=false;$("play4d").textContent="▶ Reproducir 4D"};
+$("analyze").onclick=analyze;
+$("reset").onclick=()=>location.reload();
+addEventListener("resize",resize);
