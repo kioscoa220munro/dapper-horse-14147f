@@ -104,7 +104,7 @@ input.onchange=()=>{
   if(!f)return;
   const setState=(msg)=>{ $("state").textContent=msg; };
   clearTimeout(loadTimer);
-  setState("Leyendo video…");
+  setState("Leyendo video del celular…");
   $("fileName").textContent=f.name;
   $("frames").textContent="0";
   $("points").textContent="0";
