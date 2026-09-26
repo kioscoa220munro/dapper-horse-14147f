@@ -38,7 +38,13 @@ async function analyze(){
  const c=document.createElement("canvas");c.width=64;c.height=36;const ctx=c.getContext("2d",{willReadFrequently:true});let prev=null,motion=0,old=preview.currentTime,wasPlaying=!preview.paused;preview.pause();
  for(let i=0;i<total;i++){
   const t=total===1?0:i/(total-1)*Math.max(0,preview.duration-.001);
-  await new Promise(resolve=>{const f=()=>{preview.removeEventListener("seeked",f);resolve();};preview.addEventListener("seeked",f,{once:true});preview.currentTime=t;});
+  await new Promise(resolve=>{
+      let done=false;
+      const finish=()=>{if(done)return;done=true;preview.removeEventListener("seeked",finish);clearTimeout(timer);resolve();};
+      const timer=setTimeout(finish,1200);
+      preview.addEventListener("seeked",finish,{once:true});
+      preview.currentTime=t;
+    });
   ctx.drawImage(preview,0,0,64,36);const d=ctx.getImageData(0,0,64,36).data;
   if(prev){let diff=0;for(let p=0;p<d.length;p+=4)diff+=Math.abs(d[p]-prev[p])+Math.abs(d[p+1]-prev[p+1])+Math.abs(d[p+2]-prev[p+2]);motion+=diff/(64*36*3*255);}prev=d;
   $("points").textContent=String((i+1)*cols*rows);$("state").textContent="Analizando video · "+Math.round((i+1)/total*100)+"%";await new Promise(requestAnimationFrame);
@@ -56,5 +62,7 @@ window.addEventListener("resize",resize);
 function handleVideo(file,url=null){if(!file)return; $("state").textContent="Leyendo video del celular…";$("fileName").textContent=file.name;if(selectedFile)selectedFile.textContent=file.name+" · "+(file.size/1048576).toFixed(1)+" MB";$("frames").textContent="0";$("points").textContent="0";if(objectURL&&objectURL!==url)URL.revokeObjectURL(objectURL);objectURL=url||URL.createObjectURL(file);preview.pause();preview.src=objectURL;preview.preload="metadata";workspace.classList.remove("hidden");preview.load();}
 window.addEventListener("a220-video-selected",e=>handleVideo(e.detail.file,e.detail.url));
 input.onchange=()=>{const f=input.files?.[0];if(f)handleVideo(f);};
-preview.onloadedmetadata=async()=>{const d=Number.isFinite(preview.duration)?preview.duration:0;if(!d){$("state").textContent="No se pudo leer la duración del video.";return;}$("duration").textContent=d.toFixed(2)+" s";timeline.min=0;timeline.max=d;timeline.value=0;$("frames").textContent=Math.max(1,Math.ceil(d*5));$("state").textContent="Video cargado · preparando escena…";await init3D();$("state").textContent="Video cargado · listo para reproducir o reconstruir";};
+preview.onloadedmetadata=async()=>{
+  preview.controls=true;
+const d=Number.isFinite(preview.duration)?preview.duration:0;if(!d){$("state").textContent="No se pudo leer la duración del video.";return;}$("duration").textContent=d.toFixed(2)+" s";timeline.min=0;timeline.max=d;timeline.value=0;$("frames").textContent=Math.max(1,Math.ceil(d*5));$("state").textContent="Video cargado · preparando escena…";await init3D();$("state").textContent="Video cargado · listo para reproducir o reconstruir";};
 preview.onloadeddata=()=>rebuildDepth(true);preview.oncanplay=()=>rebuildDepth(true);preview.onerror=()=>{$("state").textContent="Error de video: formato o códec no compatible.";};
