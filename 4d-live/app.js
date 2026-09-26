@@ -97,33 +97,4 @@ async function analyze(){
   $("state").textContent="Escena 4D navegable lista";
 }
 
-input.onchange=()=>{
-  const f=input.files[0]; if(!f)return;
-  if(objectURL)URL.revokeObjectURL(objectURL);
-  objectURL=URL.createObjectURL(f);
-  preview.src=objectURL;
-  $("fileName").textContent=f.name;
-  workspace.classList.remove("hidden");
-  preview.onloadedmetadata=()=>{
-    const d=preview.duration||0;
-    $("duration").textContent=d.toFixed(2)+" s";
-    timeline.max=d;
-    $("frames").textContent=Math.max(1,Math.ceil(d*5));
-    if(!renderer)init3D(); else resize();
-    rebuildDepth(true);
-    analyze();
-  };
-};
-
-timeline.oninput=()=>{preview.currentTime=+timeline.value;rebuildDepth(true)};
-preview.ontimeupdate=()=>{timeline.value=preview.currentTime;$("time").textContent=preview.currentTime.toFixed(2)+" s";};
-$("play4d").onclick=async()=>{
-  playing=!playing;
-  $("play4d").textContent=playing?"⏸ Pausar 4D":"▶ Reproducir 4D";
-  if(playing)await preview.play(); else preview.pause();
-};
-preview.onplay=()=>{playing=true;$("play4d").textContent="⏸ Pausar 4D"};
-preview.onpause=()=>{playing=false;$("play4d").textContent="▶ Reproducir 4D"};
-$("analyze").onclick=analyze;
-$("reset").onclick=()=>location.reload();
-addEventListener("resize",resize);
+input.onchange=()=>{\n  const f=input.files?.[0];\n  if(!f)return;\n  const setState=(msg)=>{ $("state").textContent=msg; };\n  setState("Cargando video…");\n  $("fileName").textContent=f.name;\n  $("frames").textContent="0";\n  $("points").textContent="0";\n  if(objectURL)URL.revokeObjectURL(objectURL);\n  preview.pause();\n  preview.removeAttribute("src");\n  preview.load();\n  objectURL=URL.createObjectURL(f);\n  preview.src=objectURL;\n  preview.load();\n  workspace.classList.remove("hidden");\n};\n\npreview.onloadedmetadata=()=>{\n  const d=Number.isFinite(preview.duration)?preview.duration:0;\n  if(!d){ $("state").textContent="No se pudo leer la duración del video."; return; }\n  $("duration").textContent=d.toFixed(2)+" s";\n  timeline.min=0;\n  timeline.max=d;\n  timeline.value=0;\n  $("frames").textContent=Math.max(1,Math.ceil(d*5));\n  if(!renderer)init3D(); else resize();\n  preview.currentTime=0;\n  $("state").textContent="Video cargado · listo para reconstruir";\n};\n\npreview.oncanplay=()=>{\n  if(preview.readyState>=3 && renderer) rebuildDepth(true);\n};\n\npreview.onerror=()=>{\n  const code=preview.error?.code;\n  const detail=code===4?"Formato o códec no compatible en este navegador.":"No se pudo leer el archivo.";\n  $("state").textContent="Error de video: "+detail;\n};\n\n
