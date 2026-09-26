@@ -55,45 +55,127 @@ $("play4d").addEventListener("click",async()=>{
 
 timeline.addEventListener("input",()=>{if(isFinite(preview.duration))preview.currentTime=Number(timeline.value);});
 
+let camera={yaw:0,pitch:0,distance:3.2,panX:0,panY:0};
+let nav={drag:false,lastX:0,lastY:0,pointers:new Map(),pinch:0};
+let depthCanvas=null,depthCtx=null,points3d=[];
 function setupCanvas(){
   if(sceneCanvas)return;
   sceneCanvas=document.createElement("canvas");
   sceneCanvas.className="sceneCanvas";
+  sceneCanvas.style.touchAction="none";
   sceneHost.innerHTML="";
   sceneHost.appendChild(sceneCanvas);
   sceneCtx=sceneCanvas.getContext("2d");
+  depthCanvas=document.createElement("canvas");
+  depthCanvas.width=96; depthCanvas.height=54;
+  depthCtx=depthCanvas.getContext("2d",{willReadFrequently:true});
   resizeCanvas();
   window.addEventListener("resize",resizeCanvas);
+  sceneCanvas.addEventListener("pointerdown",navDown);
+  sceneCanvas.addEventListener("pointermove",navMove);
+  sceneCanvas.addEventListener("pointerup",navUp);
+  sceneCanvas.addEventListener("pointercancel",navUp);
+  sceneCanvas.addEventListener("wheel",navWheel,{passive:false});
 }
 function resizeCanvas(){
   if(!sceneCanvas)return;
   const r=sceneHost.getBoundingClientRect();
   const w=Math.max(320,Math.floor(r.width)),h=Math.max(220,Math.floor(r.height));
   const d=Math.min(window.devicePixelRatio||1,2);
-  sceneCanvas.width=w*d;sceneCanvas.height=h*d;sceneCanvas.style.width=w+"px";sceneCanvas.style.height=h+"px";
+  sceneCanvas.width=w*d;sceneCanvas.height=h*d;
+  sceneCanvas.style.width=w+"px";sceneCanvas.style.height=h+"px";
   sceneCtx.setTransform(d,0,0,d,0,0);
+}
+function navDown(e){
+  sceneCanvas.setPointerCapture?.(e.pointerId);
+  nav.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(nav.pointers.size===1){
+    nav.drag=true;nav.lastX=e.clientX;nav.lastY=e.clientY;
+  }else if(nav.pointers.size===2){
+    const a=[...nav.pointers.values()];
+    nav.pinch=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
+  }
+}
+function navMove(e){
+  if(!nav.pointers.has(e.pointerId))return;
+  nav.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(nav.pointers.size===2){
+    const a=[...nav.pointers.values()];
+    const dist=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
+    if(nav.pinch>0) camera.distance=Math.max(1.25,Math.min(8,camera.distance*(nav.pinch/dist)));
+    nav.pinch=dist;
+    return;
+  }
+  if(!nav.drag)return;
+  const dx=e.clientX-nav.lastX,dy=e.clientY-nav.lastY;
+  nav.lastX=e.clientX;nav.lastY=e.clientY;
+  camera.yaw+=dx*.009;
+  camera.pitch=Math.max(-1.15,Math.min(1.15,camera.pitch+dy*.009));
+}
+function navUp(e){
+  nav.pointers.delete(e.pointerId);
+  if(nav.pointers.size===0)nav.drag=false;
+  if(nav.pointers.size<2)nav.pinch=0;
+}
+function navWheel(e){
+  e.preventDefault();
+  camera.distance=Math.max(1.25,Math.min(8,camera.distance*Math.exp(e.deltaY*.001)));
+}
+function buildPointCloud(){
+  if(!preview.videoWidth||preview.readyState<2||!depthCtx)return;
+  try{
+    depthCtx.drawImage(preview,0,0,96,54);
+    const data=depthCtx.getImageData(0,0,96,54).data;
+    points3d=[];
+    for(let y=0;y<54;y++)for(let x=0;x<96;x++){
+      const i=(y*96+x)*4;
+      const r=data[i],g=data[i+1],b=data[i+2];
+      const lum=(.2126*r+.7152*g+.0722*b)/255;
+      const xx=(x/95-.5)*3.2;
+      const yy=(.5-y/53)*1.8;
+      const z=(lum-.5)*.95;
+      points3d.push({x:xx,y:yy,z,r,g,b});
+    }
+  }catch(e){}
+}
+function projectPoint(p,w,h){
+  let x=p.x,y=p.y,z=p.z;
+  const cy=Math.cos(camera.yaw),sy=Math.sin(camera.yaw);
+  const cp=Math.cos(camera.pitch),sp=Math.sin(camera.pitch);
+  const x1=x*cy-z*sy, z1=x*sy+z*cy;
+  const y1=y*cp-z1*sp, z2=y*sp+z1*cp;
+  const depth=camera.distance-z2;
+  if(depth<=.15)return null;
+  const f=1.7/depth;
+  return {x:w/2+camera.panX+x1*f*w*.36,y:h/2+camera.panY-y1*f*h*.44,scale:f};
 }
 function drawScene(){
   if(!preview.videoWidth||preview.readyState<2)return;
   setupCanvas();
+  if(!points3d.length || Math.abs((points3d._t||-1)-(preview.currentTime||0))>.08){
+    buildPointCloud();
+    points3d._t=preview.currentTime||0;
+  }
   const w=sceneCanvas.clientWidth,h=sceneCanvas.clientHeight;
   sceneCtx.clearRect(0,0,w,h);
   sceneCtx.fillStyle="#030407";sceneCtx.fillRect(0,0,w,h);
-  const scale=Math.min((w-30)/preview.videoWidth,(h-30)/preview.videoHeight);
-  const dw=preview.videoWidth*scale,dh=preview.videoHeight*scale,x=(w-dw)/2,y=(h-dh)/2;
-  sceneCtx.save();
-  sceneCtx.translate(w/2,h/2);
-  const z=1+0.035*Math.sin((preview.currentTime||0)*2);
-  sceneCtx.scale(z,z);
-  sceneCtx.translate(-w/2,-h/2);
-  sceneCtx.globalAlpha=.95;
-  sceneCtx.drawImage(preview,x,y,dw,dh);
-  sceneCtx.restore();
-  sceneCtx.strokeStyle="rgba(80,220,255,.55)";
-  sceneCtx.strokeRect(x,y,dw,dh);
-  sceneCtx.fillStyle="rgba(80,220,255,.9)";
+  const projected=[];
+  for(const p of points3d){
+    const q=projectPoint(p,w,h);
+    if(q)projected.push({...q,p});
+  }
+  projected.sort((a,b)=>a.scale-b.scale);
+  for(const q of projected){
+    const size=Math.max(.8,Math.min(4.2,1.15*q.scale));
+    sceneCtx.fillStyle="rgb("+q.p.r+","+q.p.g+","+q.p.b+")";
+    sceneCtx.fillRect(q.x,q.y,size,size);
+  }
+  sceneCtx.strokeStyle="rgba(80,220,255,.45)";
+  sceneCtx.strokeRect(8,8,w-16,h-16);
+  sceneCtx.fillStyle="rgba(80,220,255,.95)";
   sceneCtx.font="12px sans-serif";
-  sceneCtx.fillText("4D · t="+(preview.currentTime||0).toFixed(2)+"s",12,20);
+  sceneCtx.fillText("4D · t="+(preview.currentTime||0).toFixed(2)+"s",14,24);
+  sceneCtx.fillText("ORBITA · ZOOM · ARRASTRA",14,h-14);
 }
 function loop(){drawScene();raf=requestAnimationFrame(loop);}
 setupCanvas();loop();
