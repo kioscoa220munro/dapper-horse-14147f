@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>4D — Reconstrucción espacio-tiempo</title>
+<link rel="stylesheet" href="./style.css?v=4d17">
+</head>
+<body>
+<header><b>4D</b><span>ESPACIO · MOVIMIENTO · TIEMPO</span><em>MOTOR WEBGPU · REAL</em></header>
+<main>
+<section class="hero">
+  <div>
+    <p class="eyebrow">ESPACIO-TIEMPO 4D</p>
+    <h1>Reconstruí un espacio real y recorrélo en el tiempo.</h1>
+    <p>Ahora la reconstrucción se ejecuta de verdad en el navegador: selección de fotogramas, SfM/poses y entrenamiento de Gaussian Splatting con WebGPU. El tiempo del video controla la trayectoria de cámara sobre la escena reconstruida.</p>
+    <div class="upload" id="videoPicker">
+      <button type="button" id="pickVideo">📹 Seleccionar video</button>
+      <input id="video" type="file" accept="video/*,.mp4,.mov,.m4v,.webm" hidden>
+      <strong id="selectedFile">Ningún video seleccionado</strong>
+      <small>MP4/MOV desde Galería o Archivos.</small>
+    </div>
+  </div>
+  <div class="orb"><span>4D</span><i>SPACE<br>TIME</i></div>
+</section>
+<section id="workspace" class="workspace hidden">
+  <div class="bar"><div><strong id="fileName">Captura</strong><span id="state">Listo</span></div><button id="reset">Nuevo proyecto</button></div>
+  <div class="layout">
+    <div class="panel"><div class="panelTitle">CAPTURA</div><div class="stage"><video id="preview" controls playsinline></video></div></div>
+    <div class="panel viewerPanel">
+      <div class="panelTitle">VISOR 4D <span id="viewerTime">t = 0.00 s</span></div>
+      <div id="scene" class="realScene"><div class="sceneEmpty"><b>VISOR 4D</b><span>Seleccioná un video y ejecutá Reconstruir 4D.</span></div></div>
+      <div class="viewerHelp">Gaussian Splat real · la línea de tiempo mueve la cámara por las poses recuperadas</div>
+    </div>
+  </div>
+  <div class="stats">
+    <div><b id="duration">0.00 s</b><small>captura</small></div>
+    <div><b id="frames">0</b><small>fotogramas usados</small></div>
+    <div><b id="jobState">LOCAL</b><small>motor</small></div>
+    <div><b id="points">—</b><small>gaussianas</small></div>
+  </div>
+  <div class="controls">
+    <button id="play4d">▶ Reproducir</button>
+    <button id="analyze">⚡ Reconstruir 4D</button>
+    <button id="exportPly" class="secondaryAction" hidden>⬇ Guardar .PLY</button>
+  </div>
+  <div class="timeline"><input id="timeline" type="range" min="0" max="0" step=".01" value="0"><span id="time">0.00 s</span></div>
+  <div class="pipeline">
+    <i id="p1" class="active">01 · VIDEO</i><i id="p2">02 · FRAMES</i><i id="p3">03 · SfM / POSES</i><i id="p4">04 · GAUSSIANS</i><i id="p5">05 · ENTRENAMIENTO</i><i id="p6">06 · TIEMPO</i><i id="p7">07 · ESCENA 4D</i>
+  </div>
+  <div class="notice" id="engineNotice"><b>Motor real:</b> video → fotogramas nítidos → SfM/poses → Gaussian Splatting WebGPU → trayectoria temporal → visor 3D navegable. No se genera una nube falsa ni una profundidad inventada. El procesamiento ocurre localmente en el dispositivo con WebGPU.</div>
+</section>
+</main>
+<script>
+(() => {
+  const DB="a220-4d-video", STORE="files";
+  const openDB=()=>new Promise((resolve,reject)=>{const r=indexedDB.open(DB,1);r.onupgradeneeded=()=>r.result.createObjectStore(STORE);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+  const save=async(file,key)=>{try{const db=await openDB();const tx=db.transaction(STORE,"readwrite");tx.objectStore(STORE).put(file,key);await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});}catch(e){}};
+  const load=async(key)=>{try{const db=await openDB();return await new Promise((res,rej)=>{const r=db.transaction(STORE).objectStore(STORE).get(key);r.onsuccess=()=>res(r.result||null);r.onerror=()=>rej(r.error)});}catch(e){return null}};
+  const input=document.getElementById("video");
+  document.getElementById("pickVideo").onclick=()=>input.click();
+  input.onchange=async()=>{const f=input.files?.[0];if(!f)return;await save(f,"current");emitVideo(f);};
+  document.getElementById("reset").onclick=async()=>{try{const db=await openDB(),tx=db.transaction(STORE,"readwrite");tx.objectStore(STORE).delete("current");}catch(e){}input.value="";location.reload();};
+  function emitVideo(file){const url=URL.createObjectURL(file);document.getElementById("workspace").classList.remove("hidden");document.getElementById("selectedFile").textContent=file.name+" · "+(file.size/1048576).toFixed(1)+" MB";window.dispatchEvent(new CustomEvent("a220-video-selected",{detail:{file,url}}));}
+  window.addEventListener("DOMContentLoaded",async()=>{const v=await load("current");if(v)emitVideo(v);});
+})();
+</script>
+<script type="module" src="./app.js?v=4d17"></script>
+</body>
+</html>

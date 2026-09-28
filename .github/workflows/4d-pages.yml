@@ -1,18 +1,25 @@
-name: Deploy 4D to GitHub Pages
+name: Deploy A220 + 4D to GitHub Pages
 on:
   push:
-    branches: ["main"]
+    branches: ["4d-pages"]
     paths:
-      - "4d/**"
+      - "4d-live/**"
       - ".github/workflows/4d-pages.yml"
+      - "index.html"
+      - "css/**"
+      - "js/**"
+      - "4d/**"
   workflow_dispatch:
+
 permissions:
   contents: read
   pages: write
   id-token: write
+
 concurrency:
   group: "pages"
   cancel-in-progress: true
+
 jobs:
   deploy:
     environment:
@@ -22,12 +29,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
-      - name: Upload 4D
+
+      - name: Prepare complete site
+        run: |
+          rm -rf _site
+          mkdir -p _site
+          cp -R index.html css js 4d 4d-live _site/
+
+      - name: Upload complete site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./4d
+          path: ./_site
+
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
