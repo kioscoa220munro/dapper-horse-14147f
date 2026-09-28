@@ -97,7 +97,7 @@ async function extractVideoFrames(file) {
   setPipeline(2);
   status("ANALIZANDO", "Analizando nitidez y movimiento del video…");
   const result = await extractSharpFrames(file, {
-    maxFrames: matchMedia("(any-pointer: coarse)").matches ? 90 : 150,
+    maxFrames: matchMedia("(any-pointer: coarse)").matches ? 48 : 100,
     minFrames: 12,
     minGapSec: 0.15,
     maxGapSec: 0.35,
@@ -143,6 +143,11 @@ async function reconstruct() {
       initTarget: phone ? 30000 : 60000,
       frames: { featMaxDim: phone ? 720 : 960, trainMaxDim: phone ? 640 : 960 },
       trainer: { shDeg: 0, maxSplats: phone ? 180000 : 400000 },
+      // GitHub Pages is a different origin from the Splat.js CDN. Its SIFT and
+      // RANSAC workers must be same-origin, so use the library's deterministic
+      // inline fallbacks until the workers are vendored into this site.
+      workers: false,
+      pairWorkers: false,
       ...(phone ? { lowMem: true, sfm: { workers: 3, uiYield: true } } : {}),
     });
 
