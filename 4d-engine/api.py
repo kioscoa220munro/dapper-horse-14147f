@@ -2,6 +2,7 @@ import os, uuid, subprocess, threading, time
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 ROOT=Path(os.getenv("DATA_DIR","/data"))
 ROOT.mkdir(parents=True,exist_ok=True)
@@ -44,6 +45,13 @@ async def create_job(video:UploadFile=File(...)):
     JOBS[jid]={"id":jid,"status":"queued","progress":0,"message":"En cola","video":video.filename}
     threading.Thread(target=run_job,args=(jid,path),daemon=True).start()
     return JOBS[jid]
+
+@app.get("/jobs/{job_id}/scene")
+def get_scene(job_id:str):
+    if job_id not in JOBS: raise HTTPException(404,"Job no encontrado")
+    scene=next((p for p in (ROOT/job_id).glob("*.4dgs")),None)
+    if scene is None: raise HTTPException(404,"Escena todavía no disponible")
+    return FileResponse(scene,media_type="application/octet-stream",filename=scene.name)
 
 @app.get("/jobs/{job_id}")
 def get_job(job_id:str):
