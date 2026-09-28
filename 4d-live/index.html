@@ -2,58 +2,74 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>4D — Espacio · Movimiento · Tiempo</title>
-<link rel="stylesheet" href="./style.css?v=4d7">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>4D — Reconstrucción espacio-tiempo</title>
+<link rel="stylesheet" href="./style.css?v=4d16">
 </head>
 <body>
-<header><b>4D</b><span>ESPACIO · MOVIMIENTO · TIEMPO</span><em>MOTOR 4D · v7</em></header>
+<header><b>4D</b><span>ESPACIO · MOVIMIENTO · TIEMPO</span><em>MOTOR 4D · REAL</em></header>
 <main>
 <section class="hero">
   <div>
     <p class="eyebrow">ESPACIO-TIEMPO 4D</p>
-    <h1>Convertí un video en una escena 3D navegable en el tiempo.</h1>
-    <p>El navegador construye una superficie espacial dinámica a partir de los fotogramas del video, la texturiza con la imagen real y permite recorrer espacio, cámara y tiempo.</p>
+    <h1>Reconstruí un espacio real y recorrélo en el tiempo.</h1>
+    <p>Esta versión ya no inventa profundidad en el navegador. La captura se prepara para un motor GPU de reconstrucción 4DGS y el resultado se reproduce como una escena temporal navegable.</p>
     <div class="upload" id="videoPicker">
-      <button type="button" id="pickVideo">📹 Seleccionar video del celular</button>
+      <button type="button" id="pickVideo">📹 Seleccionar video</button>
       <input id="video" type="file" accept="video/*" hidden>
       <strong id="selectedFile">Ningún video seleccionado</strong>
-      <small>Elegí un video existente de Galería o Archivos.</small>
+      <small>MP4/MOV desde Galería o Archivos.</small>
+    </div>
+    <div class="upload secondary">
+      <button type="button" id="pickScene">🧊 Abrir escena 4D (.4dgs)</button>
+      <input id="sceneFile" type="file" accept=".4dgs,application/octet-stream" hidden>
+      <strong id="selectedScene">Ninguna escena 4D</strong>
+      <small>El visor acepta el contenedor temporal .4dgs como salida del motor.</small>
     </div>
   </div>
   <div class="orb"><span>4D</span><i>SPACE<br>TIME</i></div>
 </section>
 
 <section id="workspace" class="workspace hidden">
-  <div class="bar"><div><strong id="fileName">Video</strong><span id="state">Preparando motor 4D…</span></div><button id="reset">Nuevo video</button></div>
+  <div class="bar"><div><strong id="fileName">Captura</strong><span id="state">Listo</span></div><button id="reset">Nuevo proyecto</button></div>
 
   <div class="layout">
     <div class="panel">
-      <div class="panelTitle">CAPTURA TEMPORAL</div>
+      <div class="panelTitle">CAPTURA</div>
       <div class="stage"><video id="preview" controls playsinline></video></div>
     </div>
     <div class="panel viewerPanel">
-      <div class="panelTitle">NAVEGACIÓN 4D <span id="viewerTime">t = 0.00 s</span></div>
-      <div id="scene"></div>
-      <div class="viewerHelp">Arrastrá para orbitar · rueda/pellizco para zoom · el relieve cambia con el tiempo</div>
-      <div class="viewerBadge">● ESCENA DINÁMICA</div>
+      <div class="panelTitle">VISOR 4D <span id="viewerTime">t = 0.00 s</span></div>
+      <div id="scene" class="realScene">
+        <div class="sceneEmpty">
+          <b>VISOR 4D</b>
+          <span>La escena aparece aquí cuando el motor GPU entrega el modelo.</span>
+        </div>
+      </div>
+      <div class="viewerHelp">Un dedo: orbitar · dos dedos: zoom · deslizar la línea de tiempo: cambiar el instante</div>
     </div>
   </div>
 
   <div class="stats">
-    <div><b id="duration">0.00 s</b><small>duración</small></div>
-    <div><b id="frames">0</b><small>muestras temporales</small></div>
-    <div><b id="fps">5</b><small>FPS de análisis</small></div>
-    <div><b id="points">0</b><small>vértices 3D</small></div>
+    <div><b id="duration">0.00 s</b><small>captura</small></div>
+    <div><b id="frames">0</b><small>fotogramas</small></div>
+    <div><b id="jobState">LOCAL</b><small>estado del motor</small></div>
+    <div><b id="points">—</b><small>gaussianas</small></div>
   </div>
 
-  <div class="controls"><button id="play4d">▶ Reproducir 4D</button><button id="analyze">⚡ Reconstruir escena</button></div>
+  <div class="controls">
+    <button id="play4d">▶ Reproducir</button>
+    <button id="analyze">⚡ Reconstruir 4D</button>
+  </div>
   <div class="timeline"><input id="timeline" type="range" min="0" max="0" step=".01" value="0"><span id="time">0.00 s</span></div>
 
   <div class="pipeline">
-    <i class="active">01 · VIDEO</i><i class="active">02 · FRAMES</i><i id="p3">03 · COLMAP</i><i id="p4">04 · 3DGS</i><i id="p5">05 · MOVIMIENTO</i><i id="p6">06 · 4DGS</i><i id="p7">07 · COMPRESIÓN</i>
+    <i class="active">01 · VIDEO</i><i id="p2">02 · FRAMES</i><i id="p3">03 · SfM / POSES</i><i id="p4">04 · GAUSSIANS</i><i id="p5">05 · MOVIMIENTO</i><i id="p6">06 · 4DGS</i><i id="p7">07 · .4DGS</i>
   </div>
-  <p class="notice"><b>Motor navegador:</b> reconstrucción visual 3D temporal con malla texturizada y profundidad estimada por fotograma. La capa métrica COLMAP/3DGS/4DGS requiere procesamiento GPU de backend y queda preparada como siguiente etapa del pipeline.</p>
+  <div class="notice" id="engineNotice">
+    <b>Arquitectura real:</b> video → frames → poses/estructura → Gaussian Splatting temporal → .4dgs → visor WebGPU/WebGL.
+    El navegador no simula la reconstrucción: el entrenamiento pesado debe ejecutarse en un worker con GPU.
+  </div>
 </section>
 </main>
 
@@ -65,34 +81,30 @@
     r.onupgradeneeded=()=>r.result.createObjectStore(STORE);
     r.onsuccess=()=>resolve(r.result); r.onerror=()=>reject(r.error);
   });
-  const saveFile=async file=>{try{const db=await openDB();const tx=db.transaction(STORE,"readwrite");tx.objectStore(STORE).put(file,"current");await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=()=>rej(tx.error)}); }catch(e){console.warn("No se pudo guardar el video",e)}};
-  const loadFile=async()=>{try{const db=await openDB();return await new Promise((res,rej)=>{const r=db.transaction(STORE).objectStore(STORE).get("current");r.onsuccess=()=>res(r.result||null);r.onerror=()=>rej(r.error)})}catch(e){return null}};
-  const emit=(file)=>{
-    if(!file)return;
+  const save=async(file,key)=>{try{const db=await openDB();const tx=db.transaction(STORE,"readwrite");tx.objectStore(STORE).put(file,key);await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});}catch(e){}};
+  const load=async(key)=>{try{const db=await openDB();return await new Promise((res,rej)=>{const r=db.transaction(STORE).objectStore(STORE).get(key);r.onsuccess=()=>res(r.result||null);r.onerror=()=>rej(r.error)});}catch(e){return null}};
+  const input=document.getElementById("video"), sceneInput=document.getElementById("sceneFile");
+  document.getElementById("pickVideo").onclick=()=>input.click();
+  document.getElementById("pickScene").onclick=()=>sceneInput.click();
+  input.onchange=async()=>{const f=input.files?.[0];if(!f)return;await save(f,"current");emitVideo(f)};
+  sceneInput.onchange=async()=>{const f=sceneInput.files?.[0];if(!f)return;await save(f,"scene");window.dispatchEvent(new CustomEvent("a220-scene-selected",{detail:{file:f}}));document.getElementById("selectedScene").textContent=f.name+" · "+(f.size/1048576).toFixed(1)+" MB";};
+  document.getElementById("reset").onclick=async()=>{
+    try{const db=await openDB(),tx=db.transaction(STORE,"readwrite");tx.objectStore(STORE).delete("current");tx.objectStore(STORE).delete("scene");}catch(e){}
+    input.value="";sceneInput.value="";location.reload();
+  };
+  function emitVideo(file){
     const url=URL.createObjectURL(file);
-    document.getElementById("preview").src=url;
-    document.getElementById("preview").load();
     document.getElementById("workspace").classList.remove("hidden");
     document.getElementById("selectedFile").textContent=file.name+" · "+(file.size/1048576).toFixed(1)+" MB";
     window.dispatchEvent(new CustomEvent("a220-video-selected",{detail:{file,url}}));
-  };
-  const input=document.getElementById("video"),button=document.getElementById("pickVideo"),reset=document.getElementById("reset");
-  button.addEventListener("click",()=>input.click());
-  input.addEventListener("change",async()=>{
-    const file=input.files?.[0]; if(!file)return;
-    await saveFile(file); emit(file);
-  });
-  reset.addEventListener("click",async()=>{
-    try{const db=await openDB();const tx=db.transaction(STORE,"readwrite");tx.objectStore(STORE).delete("current");}catch(e){}
-    input.value=""; document.getElementById("workspace").classList.add("hidden");
-    document.getElementById("selectedFile").textContent="Ningún video seleccionado";
-    document.getElementById("preview").removeAttribute("src");
-  });
+  }
   window.addEventListener("DOMContentLoaded",async()=>{
-    const file=await loadFile(); if(file)emit(file);
+    const v=await load("current"), s=await load("scene");
+    if(v)emitVideo(v);
+    if(s){document.getElementById("workspace").classList.remove("hidden");document.getElementById("selectedScene").textContent=s.name+" · "+(s.size/1048576).toFixed(1)+" MB";window.dispatchEvent(new CustomEvent("a220-scene-selected",{detail:{file:s}}));}
   });
 })();
 </script>
-<script src="./app.js?v=4d13"></script>
+<script src="./app.js?v=4d16"></script>
 </body>
 </html>
